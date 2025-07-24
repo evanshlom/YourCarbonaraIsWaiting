@@ -1,0 +1,29 @@
+# AWS Resource Configuration
+cluster_name: crewai
+task_family: content-crew
+ecr_repo: marketing-crew
+s3_bucket: aiawsattack-bucket
+api_name: crewai-api
+
+# Task Resources
+cpu: "512"
+memory: "1024"
+
+# Container
+container_name: crew
+
+# IAM Roles
+task_role: ecsTaskExecutionRole
+api_role: APIGatewayECSRole
+
+# Region
+aws_region: us-east-1
+
+# Fargate Version
+platform_version: "1.4.0"
+
+# Network Mode
+network_mode: awsvpc
+
+# Launch Type
+launch_type: FARGATE

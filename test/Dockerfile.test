@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+
+WORKDIR /test
+
+RUN pip install boto3 dotenv
+
+COPY test_ai.py .
+COPY .env* ./
+
+# Run test
+CMD ["python", "test_ai.py"]

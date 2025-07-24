@@ -1,0 +1,46 @@
+research_task:
+  description: |
+    Research content creators similar to: {topic}
+    
+    Find at least 10 creators across these platforms:
+    - YouTube (subscribers, avg views, content style)
+    - LinkedIn (followers, post frequency, engagement)
+    - Twitter/X (followers, impressions, thread style)
+    - Substack (subscribers, open rates if available)
+    
+    For each creator provide:
+    - Name and handle
+    - Platform metrics
+    - Content themes
+    - Posting frequency
+    - Unique angle/style
+  expected_output: Comprehensive list of similar creators with detailed metrics
+
+analysis_task:
+  description: |
+    Analyze the platforms based on the research and rank them for a NEW creator.
+    
+    Consider:
+    - Competition saturation on each platform
+    - Audience alignment with VC/tech investors
+    - Growth difficulty for new creators
+    - Platform algorithm friendliness
+    - Monetization potential
+    
+    Rank platforms from best to worst opportunity.
+  expected_output: Platform rankings with data-driven justifications
+
+strategy_task:
+  description: |
+    Create specific content strategies for the TOP 3 platforms.
+    
+    For each platform include:
+    - Content formats that work best (posts, videos, threads, articles)
+    - Optimal posting frequency
+    - 5 pillar content topics to start with
+    - Differentiation angle from existing creators
+    - Specific tactics for first 30 days
+    - First week posting calendar
+    
+    Make it immediately actionable.
+  expected_output: Platform-specific strategies with concrete 30-day action plan

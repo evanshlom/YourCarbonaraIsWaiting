@@ -1,0 +1,12 @@
+# This file excludes unnecessary files from the ECR container on AWS
+.git
+.github
+test/
+*.md
+.gitignore
+__pycache__
+*.pyc
+.env
+.venv
+venv/
+.DS_Store

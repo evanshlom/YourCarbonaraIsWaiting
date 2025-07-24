@@ -1,0 +1,138 @@
+name: Deploy to AWS Fargate
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build and Deploy
+        run: |
+          # Load config
+          eval $(sed 's/: /=/' .github/workflows/config.yml | grep -v '^#')
+          
+          # Get account ID
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
+          # Create ECR repository if it doesn't exist
+          aws ecr create-repository --repository-name $ecr_repo || true
+          
+          # Build and push Docker image
+          docker build -t $ecr_repo .
+          docker tag $ecr_repo:latest $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/$ecr_repo:latest
+          docker push $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/$ecr_repo:latest
+          
+          # Create S3 bucket if it doesn't exist (for future use)
+          aws s3 mb s3://$s3_bucket || true
+          
+          # Create cluster
+          aws ecs create-cluster --cluster-name $cluster_name || true
+          
+          # Create task execution role if it doesn't exist
+          aws iam create-role \
+            --role-name $task_role \
+            --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }]
+            }' || true
+          
+          aws iam attach-role-policy \
+            --role-name $task_role \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || true
+          
+          aws iam attach-role-policy \
+            --role-name $task_role \
+            --policy-arn arn:aws:iam::aws:policy/CloudWatchLogsFullAccess || true
+          
+          # Create API Gateway [FOR NEXT STEPS]
+          aws iam create-role \
+            --role-name $api_role \
+            --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "apigateway.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }]
+            }' || true
+          
+          aws iam attach-role-policy \
+            --role-name $api_role \
+            --policy-arn arn:aws:iam::aws:policy/AmazonECSFullAccess || true
+          
+          # Create task role for Bedrock access
+          aws iam create-role \
+            --role-name ecsTaskRole \
+            --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }]
+            }' || true
+          
+          aws iam attach-role-policy \
+            --role-name ecsTaskRole \
+            --policy-arn arn:aws:iam::aws:policy/AmazonBedrockFullAccess || true
+          
+          # Wait for role to propagate
+          sleep 10
+          
+          # Create log group
+          aws logs create-log-group --log-group-name /ecs/$task_family || true
+          
+          # Register task definition
+          aws ecs register-task-definition \
+            --family $task_family \
+            --network-mode $network_mode \
+            --requires-compatibilities $launch_type \
+            --cpu "$cpu" \
+            --memory "$memory" \
+            --container-definitions '[{
+              "name": "'$container_name'",
+              "image": "'$ACCOUNT_ID'.dkr.ecr.us-east-1.amazonaws.com/'$ecr_repo':latest",
+              "essential": true,
+              "environment": [{
+                "name": "TOPIC",
+                "value": "default"
+              }, {
+                "name": "AWS_DEFAULT_REGION",
+                "value": "'$aws_region'"
+              }],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/'$task_family'",
+                  "awslogs-region": "'$aws_region'",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }]' \
+            --execution-role-arn arn:aws:iam::$ACCOUNT_ID:role/$task_role \
+            --task-role-arn arn:aws:iam::$ACCOUNT_ID:role/ecsTaskRole
+          
+          echo "Deployed! Task definition ready."
+          echo "Set up API Gateway in console:"
+          echo "1. Create REST API"
+          echo "2. Create /run POST method" 
+          echo "3. Integration: AWS Service -> ECS -> RunTask"
+          echo "4. Use role: $api_role"
