@@ -30,7 +30,7 @@ jobs:
           
           # Generate and upload Square POS data to S3
           pip install boto3
-          python scripts/generate_square_data.py
+          python scripts/generate_data.py
           
           # Create Glue role if it doesn't exist
           aws iam create-role \
