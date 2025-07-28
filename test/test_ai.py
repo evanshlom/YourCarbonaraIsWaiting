@@ -11,8 +11,7 @@ env_path = Path(__file__).parent / '.env'
 if env_path.exists():
     load_dotenv(env_path)
 
-def test_crew_deployment():
-    # Explicitly set AWS credentials for boto3
+def test_restaurant_crew():
     ecs = boto3.client(
         'ecs', 
         region_name='us-east-1',
@@ -35,11 +34,8 @@ def test_crew_deployment():
     # Get subnet
     subnet_id = ec2.describe_subnets()['Subnets'][0]['SubnetId']
     
-    # Get topic from env or use default
-    topic = os.getenv('CREW_TEST_TOPIC', 'I want to create rugpull reaction videos. Focus on crypto, poopcoins, and nfts.')
-    
     # Run task
-    print("Starting CrewAI task...")
+    print("Starting Restaurant Email CrewAI task...")
     response = ecs.run_task(
         cluster='crewai',
         taskDefinition='content-crew',
@@ -53,10 +49,16 @@ def test_crew_deployment():
         overrides={
             'containerOverrides': [{
                 'name': 'crew',
-                'environment': [{
-                    'name': 'TOPIC',
-                    'value': topic
-                }]
+                'environment': [
+                    {
+                        'name': 'S3_BUCKET',
+                        'value': 'aiawsattack-bucket'
+                    },
+                    {
+                        'name': 'RESTAURANT_NAME',
+                        'value': 'The Gourmet Kitchen'
+                    }
+                ]
             }]
         }
     )
@@ -67,7 +69,14 @@ def test_crew_deployment():
     # Wait for completion
     print("Waiting for task to complete...")
     waiter = ecs.get_waiter('tasks_stopped')
-    waiter.wait(cluster='crewai', tasks=[task_arn])
+    waiter.wait(
+        cluster='crewai', 
+        tasks=[task_arn],
+        WaiterConfig={
+            'Delay': 5,
+            'MaxAttempts': 60  # 5 minutes max
+        }
+    )
     
     # Check task status
     task_details = ecs.describe_tasks(cluster='crewai', tasks=[task_arn])
@@ -80,17 +89,10 @@ def test_crew_deployment():
     
     # Try different log stream patterns
     task_id = task_arn.split('/')[-1]
-    possible_streams = [
-        f"ecs/crew/{task_id}",
-        f"content-crew/crew/{task_id}",
-        f"crew/{task_id}"
-    ]
-    
     log_group = '/ecs/content-crew'
     
     try:
         # List available log streams for this specific task
-        task_id = task_arn.split('/')[-1]
         streams = logs.describe_log_streams(
             logGroupName=log_group,
             logStreamNamePrefix=f"ecs/crew/{task_id}"
@@ -112,7 +114,7 @@ def test_crew_deployment():
         
         # Print to console
         print("\n" + "="*50)
-        print("CREW OUTPUT:")
+        print("RESTAURANT CREW OUTPUT:")
         print("="*50)
         print(output)
         
@@ -120,7 +122,6 @@ def test_crew_deployment():
         result = {
             'task_arn': task_arn,
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'topic': topic,
             'output': output
         }
         
@@ -134,4 +135,4 @@ def test_crew_deployment():
         sys.exit(1)
 
 if __name__ == "__main__":
-    test_crew_deployment()
+    test_restaurant_crew()

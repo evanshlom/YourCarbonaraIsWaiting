@@ -1,21 +1,17 @@
 import os
 import json
 import sys
-from src.crew import MarketingCrew
+from src.crew import RestaurantCrew
 
 def run():
-    # Get input from environment variable (set by API Gateway mapping)
-    input_data = os.environ.get('INPUT_DATA', '{}')
+    # Restaurant email marketing inputs
+    inputs = {
+        'restaurant_name': os.environ.get('RESTAURANT_NAME', 'The Gourmet Kitchen'),
+        'campaign_goal': 'Re-engage customers and drive repeat visits'
+    }
     
-    try:
-        data = json.loads(input_data)
-        topic = data.get('topic', 'I want to create rugpull reaction videos. Focus on crypto, poopcoins, and nfts.')
-    except:
-        topic = 'I want to create rugpull reaction videos. Focus on crypto, poopcoins, and nfts.'
+    crew = RestaurantCrew().crew()
     
-    inputs = {'topic': topic}
-    
-    crew = MarketingCrew().crew()
     try:
         result = crew.kickoff(inputs=inputs)
     except Exception as e:
@@ -27,7 +23,7 @@ def run():
         'statusCode': 200,
         'body': json.dumps({
             'result': str(result),
-            'topic': topic
+            'inputs': inputs
         })
     }
     

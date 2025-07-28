@@ -1,46 +1,59 @@
-research_task:
+analyze_customers_task:
   description: |
-    Research content creators similar to: {topic}
+    Fetch and analyze customer data from the database to identify who should receive emails.
+    Focus on:
+    1. Customers who haven't visited in 30+ days (re-engagement)
+    2. Loyal customers who deserve rewards (3+ orders)
+    3. New customers who need encouragement to return (1 visit only)
     
-    Find at least 10 creators across these platforms:
-    - YouTube (subscribers, avg views, content style)
-    - LinkedIn (followers, post frequency, engagement)
-    - Twitter/X (followers, impressions, thread style)
-    - Substack (subscribers, open rates if available)
+    For each selected customer, provide:
+    - Name and email
+    - Their favorite dish(es) if any
+    - Number of visits
+    - Days since last order
+    - Recommended campaign type (re-engagement, loyalty reward, or new customer nurture)
+    - Specific insights about their dining patterns
     
-    For each creator provide:
-    - Name and handle
-    - Platform metrics
-    - Content themes
-    - Posting frequency
-    - Unique angle/style
-  expected_output: Comprehensive list of similar creators with detailed metrics
+    Use the fetch_customer_data tool to get the customer information.
+  expected_output: |
+    A detailed list of customers to email with their dining history insights and 
+    recommended campaign approaches for each.
 
-analysis_task:
+write_emails_task:
   description: |
-    Analyze the platforms based on the research and rank them for a NEW creator.
+    Based on the customer analysis, write personalized emails for each selected customer.
     
-    Consider:
-    - Competition saturation on each platform
-    - Audience alignment with VC/tech investors
-    - Growth difficulty for new creators
-    - Platform algorithm friendliness
-    - Monetization potential
+    Email guidelines:
+    - For re-engagement: Reference their specific favorite dish and how long it's been
+    - For loyalty rewards: Acknowledge their frequent visits and offer something special
+    - For new customers: Welcome them back and offer incentive for group dining
     
-    Rank platforms from best to worst opportunity.
-  expected_output: Platform rankings with data-driven justifications
+    Each email should have:
+    - Compelling subject line mentioning their name or favorite dish
+    - Personal greeting using their first name
+    - Reference to their specific dining history and preferences
+    - Clear call to action
+    - Appropriate offer based on their segment
+    
+    Make the emails feel personal and genuine, not like marketing templates.
+  expected_output: |
+    A collection of personalized emails with subject lines and body content for each
+    selected customer, ready to send.
 
-strategy_task:
+send_emails_task:
   description: |
-    Create specific content strategies for the TOP 3 platforms.
+    Send the personalized emails to each customer using the send_email tool.
     
-    For each platform include:
-    - Content formats that work best (posts, videos, threads, articles)
-    - Optimal posting frequency
-    - 5 pillar content topics to start with
-    - Differentiation angle from existing creators
-    - Specific tactics for first 30 days
-    - First week posting calendar
+    For each email:
+    1. Extract the customer name, email address, subject, and body
+    2. Use the send_email tool to send it
+    3. Log the result (success or failure)
     
-    Make it immediately actionable.
-  expected_output: Platform-specific strategies with concrete 30-day action plan
+    Compile a summary report of:
+    - Total emails sent
+    - List of customers emailed
+    - Any errors encountered
+    
+    Note: Use the email addresses provided in the customer data.
+  expected_output: |
+    A campaign execution report showing all emails sent, recipients, and status of each send.

@@ -1,4 +1,4 @@
-name: Deploy to AWS Fargate
+name: Deploy AI to AWS
 on:
   push:
     branches: [main]
@@ -27,6 +27,63 @@ jobs:
           
           # Get account ID
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
+          # Generate and upload Square POS data to S3
+          pip install boto3
+          python scripts/generate_square_data.py
+          
+          # Create Glue role if it doesn't exist
+          aws iam create-role \
+            --role-name GlueServiceRole \
+            --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "glue.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }]
+            }' || true
+          
+          aws iam attach-role-policy \
+            --role-name GlueServiceRole \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole || true
+          
+          aws iam attach-role-policy \
+            --role-name GlueServiceRole \
+            --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess || true
+          
+          # Upload Glue job script to S3
+          aws s3 cp scripts/glue_transform_job.py s3://$s3_bucket/glue_scripts/
+          
+          # Create or update Glue job
+          aws glue create-job \
+            --name square-data-transform \
+            --role arn:aws:iam::$ACCOUNT_ID:role/GlueServiceRole \
+            --command '{
+              "Name": "glueetl",
+              "ScriptLocation": "s3://'$s3_bucket'/glue_scripts/glue_transform_job.py",
+              "PythonVersion": "3"
+            }' \
+            --default-arguments '{
+              "--BUCKET_NAME": "'$s3_bucket'",
+              "--job-language": "python",
+              "--job-bookmark-option": "job-bookmark-disable"
+            }' \
+            --max-retries 0 \
+            --max-capacity 2 || \
+          aws glue update-job \
+            --job-name square-data-transform \
+            --job-update '{
+              "Role": "arn:aws:iam::'$ACCOUNT_ID':role/GlueServiceRole",
+              "Command": {
+                "Name": "glueetl",
+                "ScriptLocation": "s3://'$s3_bucket'/glue_scripts/glue_transform_job.py",
+                "PythonVersion": "3"
+              }
+            }'
+          
+          # Run Glue job
+          aws glue start-job-run --job-name square-data-transform
           
           # Create ECR repository if it doesn't exist
           aws ecr create-repository --repository-name $ecr_repo || true
@@ -62,7 +119,7 @@ jobs:
             --role-name $task_role \
             --policy-arn arn:aws:iam::aws:policy/CloudWatchLogsFullAccess || true
           
-          # Create API Gateway [FOR NEXT STEPS]
+          # Create API Gateway role
           aws iam create-role \
             --role-name $api_role \
             --assume-role-policy-document '{
@@ -78,7 +135,7 @@ jobs:
             --role-name $api_role \
             --policy-arn arn:aws:iam::aws:policy/AmazonECSFullAccess || true
           
-          # Create task role for Bedrock access
+          # Create task role for Bedrock and S3 access
           aws iam create-role \
             --role-name ecsTaskRole \
             --assume-role-policy-document '{
@@ -93,6 +150,10 @@ jobs:
           aws iam attach-role-policy \
             --role-name ecsTaskRole \
             --policy-arn arn:aws:iam::aws:policy/AmazonBedrockFullAccess || true
+          
+          aws iam attach-role-policy \
+            --role-name ecsTaskRole \
+            --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess || true
           
           # Wait for role to propagate
           sleep 10
@@ -112,11 +173,14 @@ jobs:
               "image": "'$ACCOUNT_ID'.dkr.ecr.us-east-1.amazonaws.com/'$ecr_repo':latest",
               "essential": true,
               "environment": [{
-                "name": "TOPIC",
-                "value": "default"
+                "name": "CREW_TYPE",
+                "value": "email"
               }, {
                 "name": "AWS_DEFAULT_REGION",
                 "value": "'$aws_region'"
+              }, {
+                "name": "S3_BUCKET",
+                "value": "'$s3_bucket'"
               }],
               "logConfiguration": {
                 "logDriver": "awslogs",
@@ -131,8 +195,5 @@ jobs:
             --task-role-arn arn:aws:iam::$ACCOUNT_ID:role/ecsTaskRole
           
           echo "Deployed! Task definition ready."
-          echo "Set up API Gateway in console:"
-          echo "1. Create REST API"
-          echo "2. Create /run POST method" 
-          echo "3. Integration: AWS Service -> ECS -> RunTask"
-          echo "4. Use role: $api_role"
+          echo "Glue job created: square-data-transform"
+          echo "Data pipeline: S3 → Glue → Processed data → CrewAI agents"
