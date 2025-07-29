@@ -115,7 +115,7 @@ class RestaurantCrew:
         return Agent(
             config=self.agents_config['customer_analyst'],
             llm=self.llm,
-            tools=[self.customer_data_tool()]
+            tools=[self.customer_data_tool]
         )
     
     @agent
@@ -130,7 +130,7 @@ class RestaurantCrew:
         return Agent(
             config=self.agents_config['email_sender'],
             llm=self.llm,
-            tools=[self.email_tool()]
+            tools=[self.email_tool]
         )
     
     @task

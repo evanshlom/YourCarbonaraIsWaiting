@@ -57,7 +57,7 @@ jobs:
           
           # Create or update Glue job
           aws glue create-job \
-            --name square-data-transform \
+            --name restaurant-data-transform \
             --role arn:aws:iam::$ACCOUNT_ID:role/GlueServiceRole \
             --command '{
               "Name": "glueetl",
@@ -72,7 +72,7 @@ jobs:
             --max-retries 0 \
             --max-capacity 2 || \
           aws glue update-job \
-            --job-name square-data-transform \
+            --job-name restaurant-data-transform \
             --job-update '{
               "Role": "arn:aws:iam::'$ACCOUNT_ID':role/GlueServiceRole",
               "Command": {
@@ -83,7 +83,7 @@ jobs:
             }'
           
           # Run Glue job
-          aws glue start-job-run --job-name square-data-transform
+          aws glue start-job-run --job-name restaurant-data-transform
           
           # Create ECR repository if it doesn't exist
           aws ecr create-repository --repository-name $ecr_repo || true
@@ -195,5 +195,5 @@ jobs:
             --task-role-arn arn:aws:iam::$ACCOUNT_ID:role/ecsTaskRole
           
           echo "Deployed! Task definition ready."
-          echo "Glue job created: square-data-transform"
+          echo "Glue job created: restaurant-data-transform"
           echo "Data pipeline: S3 → Glue → Processed data → CrewAI agents"
