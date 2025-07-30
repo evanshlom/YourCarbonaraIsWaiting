@@ -20,7 +20,7 @@ class RestaurantCrew:
     
     def __init__(self):
         self.llm = LLM(
-            model="bedrock/amazon.titan-text-express-v1",
+            model="bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0",
             aws_region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
         )
         
@@ -160,5 +160,6 @@ class RestaurantCrew:
             agents=self.agents,
             tasks=self.tasks,
             process=Process.sequential,
-            verbose=True
+            verbose=True,
+            function_calling_llm=self.llm
         )
