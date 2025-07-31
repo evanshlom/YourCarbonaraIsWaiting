@@ -20,7 +20,7 @@ class RestaurantCrew:
     
     def __init__(self):
         self.llm = LLM(
-            model="bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0",
+            model="bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0",
             aws_region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
         )
         
