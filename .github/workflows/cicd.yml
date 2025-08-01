@@ -31,21 +31,6 @@ jobs:
           
           # Upload to S3
           aws s3 cp email-agent.zip s3://aiawsattack-bucket/agents/
-          
-          # Deploy using AgentCore CLI
-          agentcore deploy \
-            --name restaurant-email-agent \
-            --code s3://aiawsattack-bucket/agents/email-agent.zip \
-            --runtime python3.11 \
-            --memory 512 \
-            --timeout 60 \
-            --env EMAIL_BACKEND=${{ secrets.EMAIL_BACKEND || 'mock' }} \
-            --env SENDER_EMAIL=${{ secrets.SENDER_EMAIL || 'noreply@restaurant.com' }} \
-            --env AWS_DEFAULT_REGION=us-east-1
-          
-          # Get the deployed agent ARN
-          AGENT_ARN=$(agentcore describe restaurant-email-agent --query 'agentArn' --output text)
-          echo "AGENT_ARN=$AGENT_ARN" >> $GITHUB_ENV
       
       - name: Login to ECR
         id: ecr
@@ -144,7 +129,6 @@ jobs:
               "environment": [
                 {"name": "EMAIL_BACKEND", "value": "'${{ secrets.EMAIL_BACKEND || 'mock' }}'"},
                 {"name": "SENDER_EMAIL", "value": "'${{ secrets.SENDER_EMAIL || 'noreply@restaurant.com' }}'"},
-                {"name": "AGENT_ARN", "value": "'$AGENT_ARN'"}
               ],
               "secrets": [
                 {"name": "SMTP_PASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:'$ACCOUNT_ID':secret:smtp-password::"}
