@@ -130,9 +130,6 @@ jobs:
                 {"name": "EMAIL_BACKEND", "value": "'${{ secrets.EMAIL_BACKEND || 'mock' }}'"},
                 {"name": "SENDER_EMAIL", "value": "'${{ secrets.SENDER_EMAIL || 'noreply@restaurant.com' }}'"},
               ],
-              "secrets": [
-                {"name": "SMTP_PASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:'$ACCOUNT_ID':secret:smtp-password::"}
-              ],
               "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
