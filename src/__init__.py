@@ -1,1 +1,1 @@
-# AiAwsAttack Package
+# Restaurant Email Campaign Package

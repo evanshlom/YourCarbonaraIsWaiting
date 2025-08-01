@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Sarah Thompson",
+    "email": "evshlom@gmail.com",
+    "favorite_dish": "Carbonara Pasta",
+    "days_since_visit": 45,
+    "visit_count": 2,
+    "segment": "re-engagement"
+  },
+  {
+    "name": "John Smith", 
+    "email": "evshlom@gmail.com",
+    "favorite_dish": "All American Burger",
+    "days_since_visit": 15,
+    "visit_count": 3,
+    "segment": "loyal"
+  },
+  {
+    "name": "Arfonzo Williams",
+    "email": "evshlom@gmail.com",
+    "favorite_dish": "Grilled Salmon",
+    "days_since_visit": 75,
+    "visit_count": 1,
+    "segment": "new_customer"
+  }
+]

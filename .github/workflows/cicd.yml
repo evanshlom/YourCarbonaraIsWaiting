@@ -1,4 +1,4 @@
-name: Deploy AI to AWS
+name: Deploy Email Campaign
 on:
   push:
     branches: [main]
@@ -16,92 +16,36 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       
+      - name: Upload customer data to S3
+        run: aws s3 cp data/customers.json s3://aiawsattack-bucket/
+      
       - name: Login to ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v1
       
-      - name: Build and Deploy
+      - name: Build and push Docker image
         run: |
-          # Load config
-          eval $(sed 's/: /=/' .github/workflows/config.yml | grep -v '^#')
+          # Create ECR repository if it doesn't exist
+          aws ecr create-repository --repository-name restaurant-email-app || true
           
           # Get account ID
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           
-          # Generate and upload Square POS data to S3
-          pip install boto3
-          python scripts/generate_data.py
-          
-          # Create Glue role if it doesn't exist
-          aws iam create-role \
-            --role-name GlueServiceRole \
-            --assume-role-policy-document '{
-              "Version": "2012-10-17",
-              "Statement": [{
-                "Effect": "Allow",
-                "Principal": {"Service": "glue.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-              }]
-            }' || true
-          
-          aws iam attach-role-policy \
-            --role-name GlueServiceRole \
-            --policy-arn arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole || true
-          
-          aws iam attach-role-policy \
-            --role-name GlueServiceRole \
-            --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess || true
-          
-          # Upload Glue job script to S3
-          aws s3 cp scripts/glue_transform_job.py s3://$s3_bucket/glue_scripts/
-          
-          # Create or update Glue job
-          aws glue create-job \
-            --name restaurant-data-transform \
-            --role arn:aws:iam::$ACCOUNT_ID:role/GlueServiceRole \
-            --command '{
-              "Name": "glueetl",
-              "ScriptLocation": "s3://'$s3_bucket'/glue_scripts/glue_transform_job.py",
-              "PythonVersion": "3"
-            }' \
-            --default-arguments '{
-              "--BUCKET_NAME": "'$s3_bucket'",
-              "--job-language": "python",
-              "--job-bookmark-option": "job-bookmark-disable"
-            }' \
-            --max-retries 0 \
-            --max-capacity 2 || \
-          aws glue update-job \
-            --job-name restaurant-data-transform \
-            --job-update '{
-              "Role": "arn:aws:iam::'$ACCOUNT_ID':role/GlueServiceRole",
-              "Command": {
-                "Name": "glueetl",
-                "ScriptLocation": "s3://'$s3_bucket'/glue_scripts/glue_transform_job.py",
-                "PythonVersion": "3"
-              }
-            }'
-          
-          # Run Glue job
-          aws glue start-job-run --job-name restaurant-data-transform
-          
-          # Create ECR repository if it doesn't exist
-          aws ecr create-repository --repository-name $ecr_repo || true
-          
-          # Build and push Docker image
-          docker build -t $ecr_repo .
-          docker tag $ecr_repo:latest $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/$ecr_repo:latest
-          docker push $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/$ecr_repo:latest
-          
-          # Create S3 bucket if it doesn't exist (for future use)
-          aws s3 mb s3://$s3_bucket || true
+          # Build and push
+          docker build -t restaurant-email-app .
+          docker tag restaurant-email-app:latest $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/restaurant-email-app:latest
+          docker push $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/restaurant-email-app:latest
+      
+      - name: Create/Update ECS resources
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           
           # Create cluster
-          aws ecs create-cluster --cluster-name $cluster_name || true
+          aws ecs create-cluster --cluster-name restaurant-emails || true
           
-          # Create task execution role if it doesn't exist
+          # Create task execution role if needed
           aws iam create-role \
-            --role-name $task_role \
+            --role-name ecsTaskExecutionRole \
             --assume-role-policy-document '{
               "Version": "2012-10-17",
               "Statement": [{
@@ -112,30 +56,10 @@ jobs:
             }' || true
           
           aws iam attach-role-policy \
-            --role-name $task_role \
+            --role-name ecsTaskExecutionRole \
             --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || true
           
-          aws iam attach-role-policy \
-            --role-name $task_role \
-            --policy-arn arn:aws:iam::aws:policy/CloudWatchLogsFullAccess || true
-          
-          # Create API Gateway role
-          aws iam create-role \
-            --role-name $api_role \
-            --assume-role-policy-document '{
-              "Version": "2012-10-17",
-              "Statement": [{
-                "Effect": "Allow",
-                "Principal": {"Service": "apigateway.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-              }]
-            }' || true
-          
-          aws iam attach-role-policy \
-            --role-name $api_role \
-            --policy-arn arn:aws:iam::aws:policy/AmazonECSFullAccess || true
-          
-          # Create task role for Bedrock and S3 access
+          # Create task role for S3 access
           aws iam create-role \
             --role-name ecsTaskRole \
             --assume-role-policy-document '{
@@ -149,51 +73,32 @@ jobs:
           
           aws iam attach-role-policy \
             --role-name ecsTaskRole \
-            --policy-arn arn:aws:iam::aws:policy/AmazonBedrockFullAccess || true
-          
-          aws iam attach-role-policy \
-            --role-name ecsTaskRole \
-            --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess || true
-          
-          # Wait for role to propagate
-          sleep 10
+            --policy-arn arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess || true
           
           # Create log group
-          aws logs create-log-group --log-group-name /ecs/$task_family || true
+          aws logs create-log-group --log-group-name /ecs/restaurant-email || true
           
           # Register task definition
           aws ecs register-task-definition \
-            --family $task_family \
-            --network-mode $network_mode \
-            --requires-compatibilities $launch_type \
-            --cpu "$cpu" \
-            --memory "$memory" \
+            --family restaurant-email \
+            --network-mode awsvpc \
+            --requires-compatibilities FARGATE \
+            --cpu "256" \
+            --memory "512" \
+            --execution-role-arn arn:aws:iam::$ACCOUNT_ID:role/ecsTaskExecutionRole \
+            --task-role-arn arn:aws:iam::$ACCOUNT_ID:role/ecsTaskRole \
             --container-definitions '[{
-              "name": "'$container_name'",
-              "image": "'$ACCOUNT_ID'.dkr.ecr.us-east-1.amazonaws.com/'$ecr_repo':latest",
+              "name": "app",
+              "image": "'$ACCOUNT_ID'.dkr.ecr.us-east-1.amazonaws.com/restaurant-email-app:latest",
               "essential": true,
-              "environment": [{
-                "name": "CREW_TYPE",
-                "value": "email"
-              }, {
-                "name": "AWS_DEFAULT_REGION",
-                "value": "'$aws_region'"
-              }, {
-                "name": "S3_BUCKET",
-                "value": "'$s3_bucket'"
-              }],
               "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                  "awslogs-group": "/ecs/'$task_family'",
-                  "awslogs-region": "'$aws_region'",
+                  "awslogs-group": "/ecs/restaurant-email",
+                  "awslogs-region": "us-east-1",
                   "awslogs-stream-prefix": "ecs"
                 }
               }
-            }]' \
-            --execution-role-arn arn:aws:iam::$ACCOUNT_ID:role/$task_role \
-            --task-role-arn arn:aws:iam::$ACCOUNT_ID:role/ecsTaskRole
+            }]'
           
-          echo "Deployed! Task definition ready."
-          echo "Glue job created: restaurant-data-transform"
-          echo "Data pipeline: S3 → Glue → Processed data → CrewAI agents"
+          echo "Deployment complete! Run task manually or set up EventBridge for scheduling."

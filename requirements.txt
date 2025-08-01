@@ -1,4 +1,4 @@
-crewai
-crewai[tools]
+langgraph
 langchain-aws
 boto3
+typing-extensions
