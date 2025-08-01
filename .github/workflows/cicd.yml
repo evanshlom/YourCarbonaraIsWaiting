@@ -128,7 +128,7 @@ jobs:
               "essential": true,
               "environment": [
                 {"name": "EMAIL_BACKEND", "value": "'${{ secrets.EMAIL_BACKEND || 'mock' }}'"},
-                {"name": "SENDER_EMAIL", "value": "'${{ secrets.SENDER_EMAIL || 'noreply@restaurant.com' }}'"},
+                {"name": "SENDER_EMAIL", "value": "'${{ secrets.SENDER_EMAIL || 'noreply@restaurant.com' }}'"}
               ],
               "logConfiguration": {
                 "logDriver": "awslogs",
