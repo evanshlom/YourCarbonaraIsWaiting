@@ -1,4 +1,4 @@
-name: Deploy Email Campaign
+name: Deploy Email Campaign with AgentCore
 on:
   push:
     branches: [main]
@@ -18,6 +18,34 @@ jobs:
       
       - name: Upload customer data to S3
         run: aws s3 cp data/customers.json s3://aiawsattack-bucket/
+      
+      - name: Deploy Email Agent with AgentCore
+        run: |
+          # Install AgentCore SDK
+          pip install bedrock-agentcore
+          
+          # Package the email agent
+          cd src
+          zip -r ../email-agent.zip email_agent.py
+          cd ..
+          
+          # Upload to S3
+          aws s3 cp email-agent.zip s3://aiawsattack-bucket/agents/
+          
+          # Deploy using AgentCore CLI
+          agentcore deploy \
+            --name restaurant-email-agent \
+            --code s3://aiawsattack-bucket/agents/email-agent.zip \
+            --runtime python3.11 \
+            --memory 512 \
+            --timeout 60 \
+            --env EMAIL_BACKEND=${{ secrets.EMAIL_BACKEND || 'mock' }} \
+            --env SENDER_EMAIL=${{ secrets.SENDER_EMAIL || 'noreply@restaurant.com' }} \
+            --env AWS_DEFAULT_REGION=us-east-1
+          
+          # Get the deployed agent ARN
+          AGENT_ARN=$(agentcore describe restaurant-email-agent --query 'agentArn' --output text)
+          echo "AGENT_ARN=$AGENT_ARN" >> $GITHUB_ENV
       
       - name: Login to ECR
         id: ecr
@@ -59,7 +87,7 @@ jobs:
             --role-name ecsTaskExecutionRole \
             --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || true
           
-          # Create task role for S3 access
+          # Create task role with AgentCore permissions
           aws iam create-role \
             --role-name ecsTaskRole \
             --assume-role-policy-document '{
@@ -71,14 +99,36 @@ jobs:
               }]
             }' || true
           
+          # Attach policies for S3, SES, and AgentCore
           aws iam attach-role-policy \
             --role-name ecsTaskRole \
             --policy-arn arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess || true
           
+          aws iam attach-role-policy \
+            --role-name ecsTaskRole \
+            --policy-arn arn:aws:iam::aws:policy/AmazonSESFullAccess || true
+          
+          # Create inline policy for AgentCore
+          aws iam put-role-policy \
+            --role-name ecsTaskRole \
+            --policy-name AgentCoreAccess \
+            --policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Effect": "Allow",
+                "Action": [
+                  "bedrock:InvokeAgent",
+                  "bedrock:InvokeInlineAgent",
+                  "bedrock-agent-runtime:*"
+                ],
+                "Resource": "*"
+              }]
+            }'
+          
           # Create log group
           aws logs create-log-group --log-group-name /ecs/restaurant-email || true
           
-          # Register task definition
+          # Register task definition with email backend configuration
           aws ecs register-task-definition \
             --family restaurant-email \
             --network-mode awsvpc \
@@ -91,6 +141,14 @@ jobs:
               "name": "app",
               "image": "'$ACCOUNT_ID'.dkr.ecr.us-east-1.amazonaws.com/restaurant-email-app:latest",
               "essential": true,
+              "environment": [
+                {"name": "EMAIL_BACKEND", "value": "'${{ secrets.EMAIL_BACKEND || 'mock' }}'"},
+                {"name": "SENDER_EMAIL", "value": "'${{ secrets.SENDER_EMAIL || 'noreply@restaurant.com' }}'"},
+                {"name": "AGENT_ARN", "value": "'$AGENT_ARN'"}
+              ],
+              "secrets": [
+                {"name": "SMTP_PASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:'$ACCOUNT_ID':secret:smtp-password::"}
+              ],
               "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
@@ -101,4 +159,6 @@ jobs:
               }
             }]'
           
-          echo "Deployment complete! Run task manually or set up EventBridge for scheduling."
+          echo "Deployment complete!"
+          echo "Email backend: ${{ secrets.EMAIL_BACKEND || 'mock' }}"
+          echo "AgentCore agent deployed: $AGENT_ARN"

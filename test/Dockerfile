@@ -1,13 +1,13 @@
 FROM python:3.11-slim
 
-WORKDIR /test
+WORKDIR /app
 
-# Install boto3 and python-dotenv
+# Install dependencies
 RUN pip install boto3 python-dotenv
 
-# Copy files
-COPY run_campaign.py .
-COPY .env* ./
+# Copy test runner
+COPY run_final_test.py .
+COPY .env .
 
-# Run the test
-CMD ["python", "run_campaign.py"]
+# Run the complete email campaign
+CMD ["python", "test.py"]
