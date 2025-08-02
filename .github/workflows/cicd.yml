@@ -132,7 +132,7 @@ jobs:
               "essential": true,
               "environment": [
                 {"name": "EMAIL_BACKEND", "value": "${{ env.EMAIL_BACKEND }}"},
-                {"name": "SENDER_EMAIL", "value": "${{ env.SENDER_EMAIL }}"},
+                {"name": "SENDER_EMAIL", "value": "${{ env.SENDER_EMAIL }}"}
               ],
               "logConfiguration": {
                 "logDriver": "awslogs",
