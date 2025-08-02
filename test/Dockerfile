@@ -6,7 +6,7 @@ WORKDIR /app
 RUN pip install boto3 python-dotenv
 
 # Copy test runner
-COPY run_final_test.py .
+COPY test.py .
 COPY .env .
 
 # Run the complete email campaign

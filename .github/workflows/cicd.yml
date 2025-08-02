@@ -3,6 +3,10 @@ on:
   push:
     branches: [main]
 
+env:
+  EMAIL_BACKEND: ses
+  SENDER_EMAIL: evshlom@gmail.com
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -127,8 +131,8 @@ jobs:
               "image": "'$ACCOUNT_ID'.dkr.ecr.us-east-1.amazonaws.com/restaurant-email-app:latest",
               "essential": true,
               "environment": [
-                {"name": "EMAIL_BACKEND", "value": "'${{ secrets.EMAIL_BACKEND || 'mock' }}'"},
-                {"name": "SENDER_EMAIL", "value": "'${{ secrets.SENDER_EMAIL || 'noreply@restaurant.com' }}'"}
+                {"name": "EMAIL_BACKEND", "value": "${{ env.EMAIL_BACKEND }}"},
+                {"name": "SENDER_EMAIL", "value": "${{ env.SENDER_EMAIL }}"},
               ],
               "logConfiguration": {
                 "logDriver": "awslogs",
