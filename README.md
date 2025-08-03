@@ -1,6 +1,6 @@
 # YourCarbonaraIsWaiting
 
-Restaurant email marketing system using LangGraph to send personalized emails to customers based on their dining history. **POC**
+LangGraph email marketing agent for restaurant AI to send personalized emails to customers based on their dining history. **POC**
 
 ## Project Structure
 
