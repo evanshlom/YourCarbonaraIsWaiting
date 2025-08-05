@@ -1,4 +1,3 @@
 langgraph
-langchain-aws
 boto3
-typing-extensions
+python-dotenvs

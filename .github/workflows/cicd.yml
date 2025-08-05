@@ -23,18 +23,43 @@ jobs:
       - name: Upload customer data to S3
         run: aws s3 cp data/customers.json s3://aiawsattack-bucket/
       
-      - name: Deploy Email Agent with AgentCore
+      - name: Deploy Lambda for AgentCore
         run: |
-          # Install AgentCore SDK
-          pip install bedrock-agentcore
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           
-          # Package the email agent
+          # Create Lambda execution role if needed
+          aws iam create-role \
+            --role-name email-agent-lambda-role \
+            --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }]
+            }' || true
+          
+          aws iam attach-role-policy \
+            --role-name email-agent-lambda-role \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole || true
+          
+          # Package and deploy Lambda
           cd src
-          zip -r ../email-agent.zip email_agent.py
+          zip ../function.zip lambda_agent.py
           cd ..
           
-          # Upload to S3
-          aws s3 cp email-agent.zip s3://aiawsattack-bucket/agents/
+          aws lambda create-function \
+            --function-name email-agent \
+            --runtime python3.11 \
+            --role arn:aws:iam::$ACCOUNT_ID:role/email-agent-lambda-role \
+            --handler lambda_agent.lambda_handler \
+            --zip-file fileb://function.zip \
+            --timeout 30 || \
+          aws lambda update-function-code \
+            --function-name email-agent \
+            --zip-file fileb://function.zip
+          
+          echo "EMAIL_AGENT_ARN=arn:aws:lambda:us-east-1:$ACCOUNT_ID:function:email-agent" >> $GITHUB_ENV
       
       - name: Login to ECR
         id: ecr
@@ -88,7 +113,7 @@ jobs:
               }]
             }' || true
           
-          # Attach policies for S3, SES, and AgentCore
+          # Attach policies for S3, SES, and Bedrock
           aws iam attach-role-policy \
             --role-name ecsTaskRole \
             --policy-arn arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess || true
@@ -97,18 +122,18 @@ jobs:
             --role-name ecsTaskRole \
             --policy-arn arn:aws:iam::aws:policy/AmazonSESFullAccess || true
           
-          # Create inline policy for AgentCore
+          # Create inline policy for Bedrock AgentCore
           aws iam put-role-policy \
             --role-name ecsTaskRole \
-            --policy-name AgentCoreAccess \
+            --policy-name BedrockAgentAccess \
             --policy-document '{
               "Version": "2012-10-17",
               "Statement": [{
                 "Effect": "Allow",
                 "Action": [
-                  "bedrock:InvokeAgent",
-                  "bedrock:InvokeInlineAgent",
-                  "bedrock-agent-runtime:*"
+                  "bedrock:InvokeModel",
+                  "bedrock-agent-runtime:InvokeInlineAgent",
+                  "lambda:InvokeFunction"
                 ],
                 "Resource": "*"
               }]
@@ -131,8 +156,9 @@ jobs:
               "image": "'$ACCOUNT_ID'.dkr.ecr.us-east-1.amazonaws.com/restaurant-email-app:latest",
               "essential": true,
               "environment": [
-                {"name": "EMAIL_BACKEND", "value": "${{ env.EMAIL_BACKEND }}"},
-                {"name": "SENDER_EMAIL", "value": "${{ env.SENDER_EMAIL }}"}
+                {"name": "EMAIL_BACKEND", "value": "'$EMAIL_BACKEND'"},
+                {"name": "SENDER_EMAIL", "value": "'$SENDER_EMAIL'"},
+                {"name": "EMAIL_AGENT_ARN", "value": "'$EMAIL_AGENT_ARN'"}
               ],
               "logConfiguration": {
                 "logDriver": "awslogs",
@@ -145,5 +171,5 @@ jobs:
             }]'
           
           echo "Deployment complete!"
-          echo "Email backend: ${{ secrets.EMAIL_BACKEND || 'mock' }}"
-          echo "AgentCore agent deployed: $AGENT_ARN"
+          echo "Email backend: $EMAIL_BACKEND"
+          echo "AgentCore Lambda deployed: $EMAIL_AGENT_ARN"
